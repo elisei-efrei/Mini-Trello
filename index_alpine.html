@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Trello - Gestion de Tâches</title>
+    <link rel="stylesheet" href="styles_alpine.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body>
+    <div class="app" x-data="trelloApp()">
+        <!-- Header -->
+        <header class="header">
+            <h1>Mini Trello</h1>
+            <p class="subtitle">Gestion de tâches</p>
+        </header>
+
+        <div class="container">
+            <!-- Barre de recherche et filtres -->
+            <div class="toolbar">
+                <div class="search-bar">
+                    <input 
+                        type="text" 
+                        x-model="searchQuery" 
+                        placeholder="Rechercher..."
+                        class="search-input"
+                    >
+                </div>
+                
+                <div class="filter-buttons">
+                    <button 
+                        @click="statusFilter = 'all'" 
+                        :class="{ 'active': statusFilter === 'all' }"
+                        class="filter-btn"
+                    >
+                        Toutes
+                    </button>
+                    <button 
+                        @click="statusFilter = 'todo'" 
+                        :class="{ 'active': statusFilter === 'todo' }"
+                        class="filter-btn"
+                    >
+                        À faire (<span x-text="countByStatus('todo')"></span>)
+                    </button>
+                    <button 
+                        @click="statusFilter = 'inprogress'" 
+                        :class="{ 'active': statusFilter === 'inprogress' }"
+                        class="filter-btn"
+                    >
+                        En cours (<span x-text="countByStatus('inprogress')"></span>)
+                    </button>
+                    <button 
+                        @click="statusFilter = 'done'" 
+                        :class="{ 'active': statusFilter === 'done' }"
+                        class="filter-btn"
+                    >
+                        Terminé (<span x-text="countByStatus('done')"></span>)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Formulaire d'ajout de tâche -->
+            <div class="add-task-section">
+                <button @click="showForm = !showForm" class="btn-toggle-form">
+                    <span x-text="showForm ? 'Fermer' : 'Ajouter une tâche'"></span>
+                </button>
+                
+                <form @submit.prevent="addTask" x-show="showForm" class="task-form">
+                    <div class="form-group">
+                        <label for="title">Titre</label>
+                        <input 
+                            type="text" 
+                            id="title"
+                            x-model="newTask.title" 
+                            placeholder="Titre de la tâche"
+                            required
+                            class="form-input"
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea 
+                            id="description"
+                            x-model="newTask.description" 
+                            placeholder="Description..."
+                            rows="3"
+                            class="form-textarea"
+                        ></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="status">Statut</label>
+                        <select id="status" x-model="newTask.status" class="form-select">
+                            <option value="todo">À faire</option>
+                            <option value="inprogress">En cours</option>
+                            <option value="done">Terminé</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn-submit">Ajouter la tâche</button>
+                </form>
+            </div>
+
+            <!-- Liste des tâches -->
+            <div class="tasks-container">
+                <template x-for="task in filteredTasks" :key="task.id">
+                    <div class="task-card" :class="'status-' + task.status">
+                        <!-- Mode affichage -->
+                        <div x-show="editingId !== task.id">
+                            <div class="task-header">
+                                <h3 class="task-title" x-text="task.title"></h3>
+                                <span class="task-status-badge" x-text="getStatusLabel(task.status)"></span>
+                            </div>
+                            
+                            <p class="task-description" x-text="task.description || 'Aucune description'"></p>
+                            
+                            <div class="task-footer">
+                                <select 
+                                    :value="task.status" 
+                                    @change="changeStatus(task.id, $event.target.value)"
+                                    class="status-select"
+                                >
+                                    <option value="todo">À faire</option>
+                                    <option value="inprogress">En cours</option>
+                                    <option value="done">Terminé</option>
+                                </select>
+                                
+                                <div class="task-actions">
+                                    <button @click="startEdit(task)" class="btn-edit">Modifier</button>
+                                    <button @click="confirmDelete(task.id)" class="btn-delete">Supprimer</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mode édition -->
+                        <div x-show="editingId === task.id">
+                            <div class="form-group">
+                                <label>Titre</label>
+                                <input 
+                                    type="text" 
+                                    x-model="editTask.title" 
+                                    class="form-input"
+                                >
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Description</label>
+                                <textarea 
+                                    x-model="editTask.description" 
+                                    rows="3"
+                                    class="form-textarea"
+                                ></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Statut</label>
+                                <select x-model="editTask.status" class="form-select">
+                                    <option value="todo">À faire</option>
+                                    <option value="inprogress">En cours</option>
+                                    <option value="done">Terminé</option>
+                                </select>
+                            </div>
+                            
+                            <div class="edit-actions">
+                                <button @click="saveEdit()" class="btn-save">Enregistrer</button>
+                                <button @click="cancelEdit()" class="btn-cancel">Annuler</button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Message si aucune tâche -->
+                <div x-show="filteredTasks.length === 0" class="empty-state">
+                    <p>Aucune tâche trouvée</p>
+                </div>
+            </div>
+
+            <!-- Statistiques -->
+            <div class="stats" x-show="tasks.length > 0">
+                <p>Total : <strong x-text="tasks.length"></strong> tâches</p>
+            </div>
+        </div>
+
+        <!-- Modal de confirmation de suppression -->
+        <div x-show="showDeleteModal" class="modal-overlay" @click="showDeleteModal = false">
+            <div class="modal" @click.stop>
+                <h3>Confirmer la suppression</h3>
+                <p>Voulez-vous vraiment supprimer cette tâche ?</p>
+                <div class="modal-actions">
+                    <button @click="deleteTask()" class="btn-confirm-delete">Supprimer</button>
+                    <button @click="showDeleteModal = false" class="btn-cancel-modal">Annuler</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script_alpine.js"></script>
+</body>
+</html>
